@@ -81,7 +81,3 @@ Uygulama aşağıdaki JSON formatını destekler:
 - Veri satırları, RowIndex değerine göre sıralanır
 - Excel'de geçersiz sheet isimleri otomatik olarak düzeltilir
 - Tarih formatları otomatik olarak tanınır ve formatlanır
-
-## Lisans
-
-Bu proje MIT lisansı altında dağıtılmaktadır.
