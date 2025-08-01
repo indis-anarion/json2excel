@@ -13,7 +13,7 @@ namespace Json2Excel
             {
                 string jsonFilePath = args.Length > 0 ? args[0] : "docs/FORD-KS-SingleSheet.json";
                 string excelFilePath = args.Length > 1 ? args[1] : "output.xlsx";
-                
+
                 Console.WriteLine($"JSON dosyası okunuyor: {jsonFilePath}");
                 var jsonContent = File.ReadAllText(jsonFilePath);
                 var jsonObject = JObject.Parse(jsonContent);
@@ -27,17 +27,27 @@ namespace Json2Excel
                         Console.WriteLine($"Sheet oluşturuluyor: {property.Name}");
                         if (property.Value is not JArray dataArray || dataArray.Count == 0) continue;
 
+
                         // RowIndex=0 olan satırı başlık olarak bul
                         var headerRow = dataArray.OfType<JObject>().FirstOrDefault(row => row["RowIndex"]?.ToString() == "0");
                         if (headerRow == null) continue;
 
-                        // Başlık satırını al ve hücreleri doldur
-                        var headers = headerRow.Properties().Where(p => p.Name != "RowIndex").Select(p => p.Name).ToList();
+                        // Başlıklar: RowIndex'i ilk başlık olarak ekle, ardından diğer başlıklar
+                        var headers = new List<string> { "RowIndex" };
+                        headers.AddRange(headerRow.Properties().Where(p => p.Name != "RowIndex").Select(p => p.Name));
+
+                        // Başlık satırını doldur
                         for (int col = 0; col < headers.Count; col++)
                         {
-                            worksheet.Cell(1, col + 1).Value = headerRow[headers[col]]?.ToString() ?? headers[col];
-                            worksheet.Cell(1, col + 1).Style.Font.Bold = true;
-                            worksheet.Cell(1, col + 1).Style.Fill.BackgroundColor = XLColor.LightGray;
+                            var cell = worksheet.Cell(1, col + 1);
+                            // RowIndex sütunu için özel başlık, diğerleri için JSON'daki değer
+                            // Çünkü JSON'da RowIndex=0 satırında RowIndex değeri "0" olur ama başlık "RowIndex" olmalı
+                            if (headers[col] == "RowIndex")
+                                cell.Value = "RowIndex";
+                            else
+                                cell.Value = headerRow[headers[col]]?.ToString() ?? headers[col];
+                            cell.Style.Font.Bold = true;
+                            cell.Style.Fill.BackgroundColor = XLColor.LightSkyBlue;
                         }
 
                         // Veri satırlarını RowIndex'e göre sırala
@@ -45,7 +55,7 @@ namespace Json2Excel
                             .Where(row => row["RowIndex"]?.ToString() != "0")
                             .Select(row => new { Row = row, Index = int.TryParse(row["RowIndex"]?.ToString(), out var idx) ? idx : int.MaxValue })
                             .OrderBy(x => x.Index)
-                            .Select(x => x.Row);
+                            .Select(x => x.Row).ToList();
 
                         // Veri satırlarını işleyerek Excel hücrelerine yaz
                         int excelRowIndex = 2;
@@ -53,12 +63,22 @@ namespace Json2Excel
                         {
                             for (int col = 0; col < headers.Count; col++)
                             {
-                                // Hücre değerini ayarla
-                                SetCellValue(worksheet.Cell(excelRowIndex, col + 1), dataRow[headers[col]]);
+                                var cell = worksheet.Cell(excelRowIndex, col + 1);
+                                SetCellValue(cell, dataRow[headers[col]]);
                             }
                             excelRowIndex++;
                         }
                         worksheet.Columns().AdjustToContents();
+
+                        // Zebra tasarımı için tablo oluştur
+                        if (dataRows.Count > 0)
+                        {
+                            var dataRange = worksheet.Range(1, 1, dataRows.Count + 1, headers.Count);
+                            var table = dataRange.CreateTable();
+
+                            // Zebra efekti için tablo temasını ayarla
+                            table.Theme = XLTableTheme.TableStyleLight15;
+                        }
                     }
                     workbook.SaveAs(excelFilePath);
                     Console.WriteLine($"Excel dosyası oluşturuldu: {excelFilePath}");
