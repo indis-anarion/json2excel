@@ -11,8 +11,8 @@ namespace Json2Excel
         {
             try
             {
-                string jsonFilePath = args.Length > 0 ? args[0] : "docs/FORD-KS-SingleSheet.json";
-                string excelFilePath = args.Length > 1 ? args[1] : "output.xlsx";
+                string jsonFilePath = args.Length > 0 ? args[0] : "docs/entek.json";
+                string excelFilePath = args.Length > 1 ? args[1] : "entek.xlsx";
 
                 Console.WriteLine($"JSON dosyası okunuyor: {jsonFilePath}");
                 var jsonContent = File.ReadAllText(jsonFilePath);
@@ -27,35 +27,27 @@ namespace Json2Excel
                         Console.WriteLine($"Sheet oluşturuluyor: {property.Name}");
                         if (property.Value is not JArray dataArray || dataArray.Count == 0) continue;
 
+                        // İlk veri satırından başlık isimlerini al (property adları olacak)
+                        var firstDataRow = dataArray.OfType<JObject>().FirstOrDefault();
+                        if (firstDataRow == null) continue;
 
-                        // RowIndex=0 olan satırı başlık olarak bul
-                        var headerRow = dataArray.OfType<JObject>().FirstOrDefault(row => row["RowIndex"]?.ToString() == "0");
-                        if (headerRow == null) continue;
+                        // Tüm property adlarını başlık olarak kullan (RowIndex hariç)
+                        var headers = firstDataRow.Properties()
+                            .Where(p => p.Name != "RowIndex")
+                            .Select(p => p.Name)
+                            .ToList();
 
-                        // Başlıklar: RowIndex'i ilk başlık olarak ekle, ardından diğer başlıklar
-                        var headers = new List<string> { "RowIndex" };
-                        headers.AddRange(headerRow.Properties().Where(p => p.Name != "RowIndex").Select(p => p.Name));
-
-                        // Başlık satırını doldur
+                        // Başlık satırını doldur (property adları başlık olacak)
                         for (int col = 0; col < headers.Count; col++)
                         {
                             var cell = worksheet.Cell(1, col + 1);
-                            // RowIndex sütunu için özel başlık, diğerleri için JSON'daki değer
-                            // Çünkü JSON'da RowIndex=0 satırında RowIndex değeri "0" olur ama başlık "RowIndex" olmalı
-                            if (headers[col] == "RowIndex")
-                                cell.Value = "RowIndex";
-                            else
-                                cell.Value = headerRow[headers[col]]?.ToString() ?? headers[col];
+                            cell.Value = headers[col];
                             cell.Style.Font.Bold = true;
                             cell.Style.Fill.BackgroundColor = XLColor.LightSkyBlue;
                         }
 
-                        // Veri satırlarını RowIndex'e göre sırala
-                        var dataRows = dataArray.OfType<JObject>()
-                            .Where(row => row["RowIndex"]?.ToString() != "0")
-                            .Select(row => new { Row = row, Index = int.TryParse(row["RowIndex"]?.ToString(), out var idx) ? idx : int.MaxValue })
-                            .OrderBy(x => x.Index)
-                            .Select(x => x.Row).ToList();
+                        // Tüm veri satırlarını olduğu gibi yaz 
+                        var dataRows = dataArray.OfType<JObject>().ToList();
 
                         // Veri satırlarını işleyerek Excel hücrelerine yaz
                         int excelRowIndex = 2;
